@@ -1,0 +1,39 @@
+# Dataset (too large for git)
+VOCtrainval_06-Nov-2007/
+VOCdevkit/
+*.tar
+*.zip
+
+# Model checkpoints
+checkpoints/
+*.pth
+*.pt
+*.ckpt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.eggs/
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs & outputs
+runs/
+logs/
+outputs/
+wandb/
+*.log
