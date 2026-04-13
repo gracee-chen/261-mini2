@@ -1,5 +1,23 @@
+# Core deep learning
 torch>=2.0.0
 torchvision>=0.15.0
+
+# Visualisation / data
 numpy>=1.24.0
 matplotlib>=3.7.0
 Pillow>=9.5.0
+
+# Segmentation model library (U-Net, DeepLabV3+)
+segmentation-models-pytorch>=0.3.3
+timm>=0.9.0                  # required by segmentation-models-pytorch
+
+# DINOv2 (Model 4 — 2024 foundation model approach)
+transformers>=4.38.0
+
+# Evaluation metrics (HD95)
+scipy>=1.10.0
+
+# SAM2 (Model 2) — install from GitHub:
+#   pip install git+https://github.com/facebookresearch/sam2.git
+# Download checkpoint:
+#   wget https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_base_plus.pt

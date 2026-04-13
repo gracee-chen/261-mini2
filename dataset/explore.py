@@ -11,13 +11,17 @@ The root directory should contain the VOCtrainval_06-Nov-2007/ folder
 
 import argparse
 import os
+import sys
+
+# Allow running from either the project root or the dataset/ directory.
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from voc_dataset import (
+from dataset.voc_dataset import (
     VOC_CLASSES,
     NUM_CLASSES,
     CLASS_TO_IDX,
@@ -109,8 +113,8 @@ def main():
     print(f"Number of classes: {NUM_CLASSES}")
     print("Classes:", VOC_CLASSES)
     print("\nPascal VOC 2007 Class Mapping:")
-    for idx, name in CLASS_TO_IDX.items():
-        print(f"  {name:2d}  {idx}")
+    for name, idx in CLASS_TO_IDX.items():
+        print(f"  {idx:2d}  {name}")
 
     # ------------------------------------------------------------------ #
     # 2. Load datasets

@@ -34,32 +34,6 @@ VOC_CLASSES = [
 NUM_CLASSES = len(VOC_CLASSES)          # 21
 CLASS_TO_IDX = {cls: i for i, cls in enumerate(VOC_CLASSES)}
 
-# VOC colour palette (used in SegmentationClass PNGs)
-VOC_COLORMAP = [
-    [0,   0,   0],    # 0  background
-    [128, 0,   0],    # 1  aeroplane
-    [0,   128, 0],    # 2  bicycle
-    [128, 128, 0],    # 3  bird
-    [0,   0,   128],  # 4  boat
-    [128, 0,   128],  # 5  bottle
-    [0,   128, 128],  # 6  bus
-    [128, 128, 128],  # 7  car
-    [64,  0,   0],    # 8  cat
-    [192, 0,   0],    # 9  chair
-    [64,  128, 0],    # 10 cow
-    [192, 128, 0],    # 11 diningtable
-    [64,  0,   128],  # 12 dog
-    [192, 0,   128],  # 13 horse
-    [64,  128, 128],  # 14 motorbike
-    [192, 128, 128],  # 15 person
-    [0,   64,  0],    # 16 pottedplant
-    [128, 64,  0],    # 17 sheep
-    [0,   192, 0],    # 18 sofa
-    [128, 192, 0],    # 19 train
-    [0,   64,  128],  # 20 tvmonitor
-]
-
-
 # --------------------------------------------------------------------------- #
 # Transforms
 # --------------------------------------------------------------------------- #
