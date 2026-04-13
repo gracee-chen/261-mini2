@@ -33,7 +33,8 @@ from dataset.voc_dataset import (
 # --------------------------------------------------------------------------- #
 # Visualisation helpers
 # --------------------------------------------------------------------------- #
-def show_sample(image: torch.Tensor, mask: torch.Tensor, title: str = ""):
+def show_sample(image: torch.Tensor, mask: torch.Tensor, title: str = "",
+                save_path: str = None):
     """
     Display one (image, mask) pair side by side.
 
@@ -41,6 +42,7 @@ def show_sample(image: torch.Tensor, mask: torch.Tensor, title: str = ""):
     ----------
     image : (3, H, W) float tensor  – normalised ImageNet image
     mask  : (1, H, W) or (H, W) uint8/long tensor
+    save_path : if provided, save the figure to this path instead of showing
     """
     # Denormalise image
     mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
@@ -69,7 +71,13 @@ def show_sample(image: torch.Tensor, mask: torch.Tensor, title: str = ""):
     cbar.ax.tick_params(labelsize=7)
 
     plt.tight_layout()
-    plt.show()
+    if save_path:
+        os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+        print(f"Saved -> {save_path}")
+        plt.close()
+    else:
+        plt.show()
 
 
 def class_distribution(loader: DataLoader, split: str = "train"):
@@ -105,6 +113,8 @@ def main():
                         help="Number of random samples to visualise")
     parser.add_argument("--dist", action="store_true",
                         help="Compute pixel-level class distribution (slow)")
+    parser.add_argument("--save-dir", default=None,
+                        help="Save sample figures to this directory (for Colab)")
     args = parser.parse_args()
 
     # ------------------------------------------------------------------ #
@@ -145,7 +155,8 @@ def main():
         classes_in_mask = classes_in_mask[classes_in_mask != 255]
         class_names = [VOC_CLASSES[c] for c in classes_in_mask]
         print(f"\nSample {idx} – classes present: {class_names}")
-        show_sample(img, mask, title=f"Train sample {idx}")
+        save_path = os.path.join(args.save_dir, f"sample_{idx}.png") if args.save_dir else None
+        show_sample(img, mask, title=f"Train sample {idx}", save_path=save_path)
 
     # ------------------------------------------------------------------ #
     # 5. Optional: class distribution
