@@ -174,19 +174,31 @@ def main():
     if len(args.model_type) != len(args.checkpoint):
         raise ValueError("--model-type and --checkpoint must have the same length")
 
-    image_size = 224 if all(m == "dinov2" for m in args.model_type) else args.image_size
-    _, val_ds  = get_datasets(args.voc_root, image_size=image_size)
-    val_loader = DataLoader(val_ds, batch_size=args.batch_size,
-                            shuffle=False, num_workers=args.num_workers)
+    # val_ds for display uses the default image_size
+    _, val_ds = get_datasets(args.voc_root, image_size=args.image_size)
 
-    # Collect predictions for every model
+    # Collect predictions for every model, each with its own DataLoader/image_size
     all_preds   = {}
     all_targets = None
 
     for model_type, ckpt_path in zip(args.model_type, args.checkpoint):
-        model  = load_model(model_type, ckpt_path, device,
-                            sam2_ckpt=args.sam2_ckpt, sam2_cfg=args.sam2_cfg)
-        preds, targets = run_inference(model, val_loader, device)
+        img_size = 224 if model_type == "dinov2" else args.image_size
+        _, ds_m  = get_datasets(args.voc_root, image_size=img_size)
+        loader   = DataLoader(ds_m, batch_size=args.batch_size,
+                              shuffle=False, num_workers=args.num_workers)
+        model    = load_model(model_type, ckpt_path, device,
+                              sam2_ckpt=args.sam2_ckpt, sam2_cfg=args.sam2_cfg)
+        preds, targets = run_inference(model, loader, device)
+
+        # Resize predictions (and targets) to the common display image_size if needed
+        if img_size != args.image_size:
+            def _resize_mask(arr, size):
+                t = torch.from_numpy(arr.astype(np.int64)).unsqueeze(0).unsqueeze(0).float()
+                r = F.interpolate(t, size=(size, size), mode="nearest")
+                return r.squeeze().long().numpy()
+            preds   = [_resize_mask(p, args.image_size) for p in preds]
+            targets = [_resize_mask(t, args.image_size) for t in targets]
+
         all_preds[model_type] = preds
         if all_targets is None:
             all_targets = targets
