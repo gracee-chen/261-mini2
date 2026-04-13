@@ -56,6 +56,65 @@ def get_transforms(image_size: int = 256):
 
 
 # --------------------------------------------------------------------------- #
+# Augmented dataset wrapper
+# --------------------------------------------------------------------------- #
+class AugmentedVOCDataset(torch.utils.data.Dataset):
+    """
+    Wrapper that applies synchronised geometric + colour augmentation to
+    a VOCSegmentation dataset that already returns tensors.
+
+    Geometric (applied to both image and mask):
+      - Random horizontal flip  (p=0.5)
+      - Random vertical flip    (p=0.5)
+      - Random rotation ±15°    (p=0.5)
+
+    Colour (applied to image only, after denorm → re-norm):
+      - Random brightness/contrast/saturation jitter
+    """
+
+    def __init__(self, base_dataset, augment: bool = True):
+        self.base    = base_dataset
+        self.augment = augment
+
+    def __len__(self):
+        return len(self.base)
+
+    def __getitem__(self, idx):
+        import random
+        import torchvision.transforms.functional as TF
+
+        image, mask = self.base[idx]   # (3,H,W) float, (1,H,W) uint8
+
+        if self.augment:
+            # --- Geometric (synchronised) ---
+            if random.random() > 0.5:
+                image = TF.hflip(image)
+                mask  = TF.hflip(mask)
+            if random.random() > 0.5:
+                image = TF.vflip(image)
+                mask  = TF.vflip(mask)
+            if random.random() > 0.5:
+                angle = random.uniform(-15, 15)
+                image = TF.rotate(image, angle,
+                                  interpolation=transforms.InterpolationMode.BILINEAR)
+                mask  = TF.rotate(mask, angle,
+                                  interpolation=transforms.InterpolationMode.NEAREST)
+
+            # --- Colour (image only) ---
+            # Denormalise → jitter → re-normalise
+            mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
+            std  = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
+            image = image * std + mean                     # back to [0, 1]
+            image = image.clamp(0, 1)
+            image = TF.adjust_brightness(image, random.uniform(0.8, 1.2))
+            image = TF.adjust_contrast(image,   random.uniform(0.8, 1.2))
+            image = TF.adjust_saturation(image, random.uniform(0.8, 1.2))
+            image = (image - mean) / std                   # re-normalise
+
+        return image, mask
+
+
+# --------------------------------------------------------------------------- #
 # Target post-processing
 # --------------------------------------------------------------------------- #
 def mask_to_class_index(mask: torch.Tensor) -> torch.Tensor:
@@ -116,14 +175,20 @@ def get_dataloaders(
     batch_size: int = 8,
     image_size: int = 256,
     num_workers: int = 2,
+    augment: bool = False,
 ):
     """
     Return (train_loader, val_loader).
 
-    The val split is used as the test set per project instructions;
-    the original test split is ignored.
+    Parameters
+    ----------
+    augment : if True, wrap the training set with AugmentedVOCDataset
+              (flip, rotation, colour jitter). Val set is never augmented.
     """
     train_ds, val_ds = get_datasets(root, image_size)
+
+    if augment:
+        train_ds = AugmentedVOCDataset(train_ds, augment=True)
 
     train_loader = DataLoader(
         train_ds,

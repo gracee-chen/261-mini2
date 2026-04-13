@@ -49,6 +49,8 @@ def parse_args():
     p.add_argument("--image-size",      type=int,   default=256)
     p.add_argument("--num-workers",     type=int,   default=2)
     p.add_argument("--checkpoint-dir",  default="checkpoints/deeplabv3plus")
+    p.add_argument("--augment",         action="store_true",
+                   help="Apply data augmentation (flip, rotation, colour jitter)")
     p.add_argument("--ce-weight",       type=float, default=0.7)
     p.add_argument("--dice-weight",     type=float, default=0.3)
     return p.parse_args()
@@ -72,6 +74,7 @@ def main():
         batch_size=args.batch_size,
         image_size=args.image_size,
         num_workers=args.num_workers,
+        augment=args.augment,
     )
     print(f"Train batches : {len(train_loader)}")
     print(f"Val   batches : {len(val_loader)}")
