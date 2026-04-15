@@ -80,7 +80,7 @@ def main():
         augment=False,
     )
 
-    resolutions = [128, 256, 384]
+    resolutions = [128, 256, 512]
 
     variants = [
         AblationConfig(

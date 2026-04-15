@@ -85,7 +85,7 @@ ImageNet pretrained & \cellcolor{blue!10}0.1776 & \cellcolor{blue!10}0.2364 & \c
 
 \subsection{Input Resolution}
 
-Tab.~\ref{tab:ablation_res} evaluates three spatial resolutions. The default $256{\times}256$ achieves the best mIoU (0.187), outperforming both the coarser $128{\times}128$ (0.087) and the finer $384{\times}384$ (0.141). The $128^2$ variant loses too much spatial detail for accurate boundary delineation, especially on small objects. The $384^2$ variant, despite preserving finer detail, underperforms $256^2$ because the increased input size amplifies overfitting on only 209 training images within the 25-epoch budget. This non-monotonic trend suggests that higher resolution is beneficial only when paired with sufficient training data or stronger regularisation, and validates our choice of $256{\times}256$ as the default resolution for ablation experiments.
+Tab.~\ref{tab:ablation_res} evaluates three spatial resolutions: $128{\times}128$, $256{\times}256$, and $512{\times}512$ (the main-experiment default). Results to be filled after re-running with the updated configuration.
 
 \begin{table}[t]
 \centering
@@ -97,9 +97,9 @@ Tab.~\ref{tab:ablation_res} evaluates three spatial resolutions. The default $25
 \toprule
 Resolution & mIoU $\uparrow$ & mDice $\uparrow$ & PixAcc $\uparrow$ \\
 \midrule
-$128{\times}128$ & 0.0872 & 0.1164 & 0.7666 \\
-$256{\times}256$ & \cellcolor{blue!10}0.1874 & \cellcolor{blue!10}0.2511 & \cellcolor{blue!10}0.8215 \\
-$384{\times}384$ & 0.1406 & 0.1911 & 0.8098 \\
+$128{\times}128$ & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
+$256{\times}256$ & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
+$512{\times}512$ & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
 \bottomrule
 \end{tabular}
 \end{table}
