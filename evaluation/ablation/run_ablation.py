@@ -35,7 +35,7 @@ class AblationConfig:
 
     # Data
     voc_root: str = ""
-    image_size: int = 256
+    image_size: int = 512
     batch_size: int = 8
     num_workers: int = 2
     augment: bool = False                # apply geometric augmentation
@@ -45,13 +45,13 @@ class AblationConfig:
     encoder_weights: Optional[str] = "imagenet"   # None = random init
 
     # Training
-    epochs: int = 25
+    epochs: int = 80
     lr: float = 1e-4
     weight_decay: float = 1e-4
 
     # Loss
-    ce_weight: float = 0.7
-    dice_weight: float = 0.3
+    ce_weight: float = 1.0
+    dice_weight: float = 1.0
 
 
 # --------------------------------------------------------------------------- #

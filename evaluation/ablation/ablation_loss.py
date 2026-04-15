@@ -66,9 +66,9 @@ def main():
         AblationConfig(name="Dice only",
                        checkpoint_dir="checkpoints/ablation/loss_dice",
                        ce_weight=0.0, dice_weight=1.0, **shared),
-        AblationConfig(name="CE + Dice (0.7 + 0.3)",
+        AblationConfig(name="CE + Dice (1.0 + 1.0)",
                        checkpoint_dir="checkpoints/ablation/loss_combined",
-                       ce_weight=0.7, dice_weight=0.3, **shared),
+                       ce_weight=1.0, dice_weight=1.0, **shared),
     ]
 
     results = []
