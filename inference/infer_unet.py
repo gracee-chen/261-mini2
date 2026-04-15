@@ -50,17 +50,23 @@ from models.unet_seg import build_unet
 MEAN = [0.485, 0.456, 0.406]
 STD  = [0.229, 0.224, 0.225]
 
-IMAGE_TRANSFORM = transforms.Compose([
-    transforms.Resize((256, 256)),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=MEAN, std=STD),
-])
+
+def make_transform(image_size: int = 256):
+    return transforms.Compose([
+        transforms.Resize((image_size, image_size)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=MEAN, std=STD),
+    ])
+
+# Default transform (kept for backward compatibility with other infer scripts)
+IMAGE_TRANSFORM = make_transform(256)
 
 
-def load_image(path: str) -> tuple:
+def load_image(path: str, image_size: int = 256) -> tuple:
     """Return (tensor (1,3,H,W), original PIL image)."""
     img = Image.open(path).convert("RGB")
-    return IMAGE_TRANSFORM(img).unsqueeze(0), img
+    tf = make_transform(image_size)
+    return tf(img).unsqueeze(0), img
 
 
 @torch.no_grad()
@@ -120,6 +126,7 @@ def parse_args():
     p.add_argument("--voc-root",    default=None,     help="Use VOC val split instead")
     p.add_argument("--num-samples", type=int, default=4,
                    help="Number of VOC val samples to visualise (with --voc-root)")
+    p.add_argument("--image-size",  type=int, default=256)
     p.add_argument("--output-dir",  default=None,
                    help="Save visualisations here (if omitted, plt.show() is used)")
     return p.parse_args()
@@ -145,12 +152,12 @@ def main():
 
     if args.images:
         for path in args.images:
-            tensor, pil = load_image(path)
+            tensor, pil = load_image(path, image_size=args.image_size)
             samples.append((tensor, pil, Path(path).stem))
 
     elif args.voc_root:
         import random
-        _, val_ds = get_datasets(args.voc_root, image_size=256)
+        _, val_ds = get_datasets(args.voc_root, image_size=args.image_size)
         indices   = random.sample(range(len(val_ds)), min(args.num_samples, len(val_ds)))
         for idx in indices:
             img_t, _ = val_ds[idx]

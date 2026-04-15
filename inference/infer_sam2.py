@@ -55,6 +55,7 @@ def parse_args():
     p.add_argument("--images",         nargs="*")
     p.add_argument("--voc-root",     default=None)
     p.add_argument("--num-samples",  type=int, default=4)
+    p.add_argument("--image-size",   type=int, default=256)
     p.add_argument("--output-dir",   default=None)
     return p.parse_args()
 
@@ -85,12 +86,12 @@ def main():
 
     if args.images:
         for path in args.images:
-            tensor, pil = load_image(path)
+            tensor, pil = load_image(path, image_size=args.image_size)
             samples.append((tensor, pil, Path(path).stem))
 
     elif args.voc_root:
         import random
-        _, val_ds = get_datasets(args.voc_root, image_size=256)
+        _, val_ds = get_datasets(args.voc_root, image_size=args.image_size)
         indices   = random.sample(range(len(val_ds)), min(args.num_samples, len(val_ds)))
         for idx in indices:
             img_t, _ = val_ds[idx]
