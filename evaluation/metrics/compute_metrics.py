@@ -162,21 +162,20 @@ def _per_class_iou_acc(preds, targets, num_classes=NUM_CLASSES, ignore=IGNORE_IN
 
 
 def _dice_per_class(preds, targets, num_classes=NUM_CLASSES, ignore=IGNORE_INDEX):
-    dice = np.zeros(num_classes)
-    cnt  = np.zeros(num_classes, dtype=np.int64)
+    """Return per-class Dice computed globally (dataset-level, not per-image averaged)."""
+    inter      = np.zeros(num_classes, dtype=np.int64)
+    cardinality = np.zeros(num_classes, dtype=np.int64)
 
     for p, t in zip(preds, targets):
         valid = (t != ignore)
         p_v, t_v = p[valid], t[valid]
         for c in range(num_classes):
-            pc    = (p_v == c)
-            tc    = (t_v == c)
-            denom = pc.sum() + tc.sum()
-            if denom > 0:
-                dice[c] += 2.0 * (pc & tc).sum() / denom
-                cnt[c]  += 1
+            pc = (p_v == c)
+            tc = (t_v == c)
+            inter[c]      += (pc & tc).sum()
+            cardinality[c] += pc.sum() + tc.sum()
 
-    return np.where(cnt > 0, dice / cnt, np.nan)
+    return np.where(cardinality > 0, 2.0 * inter / cardinality, np.nan)
 
 
 def _hausdorff_95_binary(pred_mask: np.ndarray, gt_mask: np.ndarray,

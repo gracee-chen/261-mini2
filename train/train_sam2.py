@@ -126,7 +126,7 @@ def main():
         optimizer = AdamW(
             [
                 {"params": model.image_encoder.parameters(), "lr": args.lr / 10},
-                {"params": list(model.fuse.parameters()) + list(model.head.parameters()),
+                {"params": list(model.lateral_convs.parameters()) + list(model.head.parameters()),
                  "lr": args.lr},
             ],
             weight_decay=args.weight_decay,

@@ -9,10 +9,10 @@ video segmenter.  We repurpose its Hiera-based image encoder as a frozen
 (or fine-tunable) backbone and attach a lightweight semantic head on top of
 the FPN feature maps.
 
-FPN feature ordering in SAM2's backbone_fpn output
+FPN feature ordering in SAM2's backbone_fpn output (after scalp=1)
   backbone_fpn[0]  → finest resolution  (~H/4 × W/4,  256 ch)
   backbone_fpn[1]  → medium resolution  (~H/8 × W/8,  256 ch)
-  backbone_fpn[-1] → coarsest           (~H/32 × W/32, 256 ch)  ← image embed
+  backbone_fpn[2]  → coarsest remaining (~H/16 × W/16, 256 ch)
 
 For semantic segmentation we fuse the two finest levels before prediction.
 
@@ -57,26 +57,32 @@ class SAM2SemanticSeg(nn.Module):
         super().__init__()
         self.image_encoder = image_encoder
         self.freeze_encoder = freeze_encoder
+        self._logged = False   # one-shot diagnostic
 
         if freeze_encoder:
             for p in self.image_encoder.parameters():
                 p.requires_grad_(False)
 
-        # Fuse finest two FPN levels before the prediction head
-        self.fuse = nn.Sequential(
-            nn.Conv2d(SAM2_FPN_CHANNELS * 2, SAM2_FPN_CHANNELS, 1, bias=False),
-            nn.BatchNorm2d(SAM2_FPN_CHANNELS),
-            nn.ReLU(inplace=True),
-        )
+        # Fuse all available FPN levels (3 after scalp=1) for richer features
+        self.lateral_convs = nn.ModuleList([
+            nn.Sequential(
+                nn.Conv2d(SAM2_FPN_CHANNELS, SAM2_FPN_CHANNELS, 1, bias=False),
+                nn.BatchNorm2d(SAM2_FPN_CHANNELS),
+                nn.ReLU(inplace=True),
+            )
+            for _ in range(3)
+        ])
 
         self.head = nn.Sequential(
             nn.Conv2d(SAM2_FPN_CHANNELS, 256, 3, padding=1, bias=False),
             nn.BatchNorm2d(256),
             nn.ReLU(inplace=True),
-            nn.Conv2d(256, 128, 3, padding=1, bias=False),
-            nn.BatchNorm2d(128),
+            nn.Dropout2d(0.1),
+            nn.Conv2d(256, 256, 3, padding=1, bias=False),
+            nn.BatchNorm2d(256),
             nn.ReLU(inplace=True),
-            nn.Conv2d(128, num_classes, 1),
+            nn.Dropout2d(0.1),
+            nn.Conv2d(256, num_classes, 1),
         )
 
     def train(self, mode: bool = True):
@@ -94,19 +100,27 @@ class SAM2SemanticSeg(nn.Module):
             enc_out = self.image_encoder(x)
 
         fpn = enc_out["backbone_fpn"]
-        # fpn[0] = finest resolution, fpn[-1] = coarsest (image embed)
-        feat_fine   = fpn[0]   # (B, 256, ~H/4,  ~W/4)
-        feat_medium = fpn[1]   # (B, 256, ~H/8,  ~W/8)
 
-        # Upsample medium to match the finest feature map
-        feat_medium = F.interpolate(
-            feat_medium,
-            size=feat_fine.shape[-2:],
-            mode="bilinear",
-            align_corners=False,
-        )
+        # One-shot diagnostic: print feature shapes and statistics
+        if not self._logged:
+            self._logged = True
+            print(f"  [SAM2 diag] input={x.shape}, FPN levels={len(fpn)}")
+            for i, f in enumerate(fpn):
+                print(f"  [SAM2 diag] fpn[{i}]: shape={f.shape}, "
+                      f"mean={f.float().mean():.4f}, std={f.float().std():.4f}")
 
-        fused  = self.fuse(torch.cat([feat_fine, feat_medium], dim=1))
+        # Fuse all FPN levels to the finest resolution
+        target_size = fpn[0].shape[-2:]   # finest level spatial size
+        fused = torch.zeros(B, SAM2_FPN_CHANNELS, *target_size,
+                            device=x.device, dtype=fpn[0].dtype)
+        for i, lat_conv in enumerate(self.lateral_convs):
+            if i < len(fpn):
+                feat = lat_conv(fpn[i])
+                if feat.shape[-2:] != target_size:
+                    feat = F.interpolate(feat, size=target_size,
+                                         mode="bilinear", align_corners=False)
+                fused = fused + feat
+
         logits = self.head(fused)
         logits = F.interpolate(logits, size=(H, W), mode="bilinear", align_corners=False)
         return logits
