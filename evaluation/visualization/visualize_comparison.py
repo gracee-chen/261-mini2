@@ -1,36 +1,25 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Best / Worst comparison visualisation.
+Best / Worst comparison visualisation — per model.
 
-For a given model (or pair of models):
-  1. Compute per-image mIoU (or person-class IoU) on the entire val set.
-  2. Rank images by that score.
-  3. Show Top-3 best and Top-3 worst as side-by-side plots:
-       Input | Ground Truth | Model Prediction(s)
+For each model, generates ONE image with:
+  - Left side (3 rows): Top-3 best images (Input | GT | Prediction)
+  - Right side (3 rows): Top-3 worst images (Input | GT | Prediction)
 
-The "person" class (index 15) focus is motivated by the assignment requirement
-to consider human class performance.
+Output filename: {model_type}_best_worst_{metric}.png
 
 Usage
 -----
     cd /path/to/261-mini2
 
-    # Single model — ranked by overall mIoU
-    python evaluation/visualization/visualize_comparison.py \\
-        --voc-root   ./VOCtrainval_06-Nov-2007 \\
-        --model-type unet \\
-        --checkpoint checkpoints/unet/best.pth \\
+    python evaluation/visualization/visualize_comparison.py \
+        --voc-root   ./VOCtrainval_06-Nov-2007 \
+        --model-type unet deeplabv3plus \
+        --checkpoint checkpoints/unet/best.pth \
+                     checkpoints/deeplabv3plus/best.pth \
+        --metric     miou \
         --output-dir results/visualization
-
-    # Two models compared, ranked by person IoU
-    python evaluation/visualization/visualize_comparison.py \\
-        --voc-root    ./VOCtrainval_06-Nov-2007 \\
-        --model-type  unet deeplabv3plus \\
-        --checkpoint  checkpoints/unet/best.pth \\
-                      checkpoints/deeplabv3plus/best.pth \\
-        --metric      person \\
-        --output-dir  results/visualization
 """
 
 import argparse
@@ -85,48 +74,55 @@ def per_image_class_iou(pred: np.ndarray, target: np.ndarray, cls: int) -> float
 
 
 # --------------------------------------------------------------------------- #
-# Plot one set of results (top-3 or worst-3)
+# Plot one model: best (left) + worst (right) in a single figure
 # --------------------------------------------------------------------------- #
 
-def plot_set(val_ds, indices_scores, model_preds_dict, model_names,
-             title: str, save_path: str, score_label: str):
+def plot_best_worst(val_ds, top3, worst3, preds, model_type,
+                    metric_name, score_label, save_path):
     """
-    Draw a grid: rows = images, columns = [Input | GT | model1 | model2 | ...]
+    Draw a 3-row x 6-column grid for a single model.
 
-    Parameters
-    ----------
-    indices_scores  : list of (dataset_index, score) tuples, length 3
-    model_preds_dict: {model_name: list_of_pred_arrays_for_all_val_images}
+    Left 3 columns  = best  images: Input | GT | Prediction
+    Right 3 columns = worst images: Input | GT | Prediction
     """
-    col_titles = ["Input", "Ground Truth"] + model_names
-    n_cols = len(col_titles)
-    n_rows = len(indices_scores)
+    n_rows = 3
+    n_cols = 6   # 3 sub-columns x 2 sides
 
     fig, axes = plt.subplots(n_rows, n_cols,
                               figsize=(3.2 * n_cols, 3.0 * n_rows))
-    if n_rows == 1:
-        axes = axes[np.newaxis, :]
 
-    for j, ct in enumerate(col_titles):
-        axes[0, j].set_title(ct, fontsize=9, fontweight="bold")
+    # Column titles
+    left_titles  = ["Input", "Ground Truth", "Prediction"]
+    right_titles = ["Input", "Ground Truth", "Prediction"]
+    for j, t in enumerate(left_titles):
+        axes[0, j].set_title(f"Best — {t}", fontsize=9, fontweight="bold")
+    for j, t in enumerate(right_titles):
+        axes[0, j + 3].set_title(f"Worst — {t}", fontsize=9, fontweight="bold")
 
-    for row_i, (ds_idx, score) in enumerate(indices_scores):
-        img_t, mask_t = val_ds[ds_idx]
-        img_np  = denorm(img_t)
-        gt_mask = clean_mask(mask_t)
+    def _fill_side(col_offset, indices_scores):
+        for row_i, (ds_idx, score) in enumerate(indices_scores):
+            img_t, mask_t = val_ds[ds_idx]
+            img_np  = denorm(img_t)
+            gt_mask = clean_mask(mask_t)
+            pred    = preds[ds_idx]
 
-        score_str = f"{score:.3f}" if not np.isnan(score) else "N/A"
-        axes[row_i, 0].set_ylabel(f"idx={ds_idx}\n{score_label}={score_str}",
-                                   fontsize=7, rotation=0, labelpad=60)
+            score_str = f"{score:.3f}" if not np.isnan(score) else "N/A"
 
-        axes[row_i, 0].imshow(img_np);               axes[row_i, 0].axis("off")
-        axes[row_i, 1].imshow(mask_to_rgb(gt_mask)); axes[row_i, 1].axis("off")
+            ax_inp = axes[row_i, col_offset]
+            ax_gt  = axes[row_i, col_offset + 1]
+            ax_pr  = axes[row_i, col_offset + 2]
 
-        for col_j, mname in enumerate(model_names):
-            pred = model_preds_dict[mname][ds_idx]
-            axes[row_i, col_j + 2].imshow(mask_to_rgb(pred))
-            axes[row_i, col_j + 2].axis("off")
+            ax_inp.imshow(img_np);              ax_inp.axis("off")
+            ax_gt.imshow(mask_to_rgb(gt_mask)); ax_gt.axis("off")
+            ax_pr.imshow(mask_to_rgb(pred));    ax_pr.axis("off")
 
+            ax_inp.set_ylabel(f"idx={ds_idx}\n{score_label}={score_str}",
+                              fontsize=7, rotation=0, labelpad=60)
+
+    _fill_side(0, top3)
+    _fill_side(3, worst3)
+
+    # Legend
     patches = [
         mpatches.Patch(color=CMAP(i / 20.0), label=f"{i}: {VOC_CLASSES[i]}")
         for i in range(NUM_CLASSES)
@@ -134,7 +130,8 @@ def plot_set(val_ds, indices_scores, model_preds_dict, model_names,
     fig.legend(handles=patches, loc="lower center", ncol=7, fontsize=6,
                bbox_to_anchor=(0.5, -0.03), frameon=True)
 
-    plt.suptitle(title, fontsize=11, y=1.01)
+    plt.suptitle(f"{model_type} — Top-3 Best vs Worst  [{score_label}]",
+                 fontsize=11, y=1.01)
     plt.tight_layout()
     os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
     plt.savefig(save_path, dpi=150, bbox_inches="tight")
@@ -177,9 +174,7 @@ def main():
     # val_ds for display uses the default image_size
     _, val_ds = get_datasets(args.voc_root, image_size=args.image_size)
 
-    # Collect predictions for every model, each with its own DataLoader/image_size
-    all_preds   = {}
-    all_targets = None
+    score_label = "mIoU" if args.metric == "miou" else "Person IoU"
 
     for model_type, ckpt_path in zip(args.model_type, args.checkpoint):
         img_size = 224 if model_type == "dinov2" else args.image_size
@@ -190,7 +185,7 @@ def main():
                               sam2_ckpt=args.sam2_ckpt, sam2_cfg=args.sam2_cfg)
         preds, targets = run_inference(model, loader, device)
 
-        # Resize predictions (and targets) to the common display image_size if needed
+        # Resize predictions/targets to common display size if needed
         if img_size != args.image_size:
             def _resize_mask(arr, size):
                 t = torch.from_numpy(arr.astype(np.int64)).unsqueeze(0).unsqueeze(0).float()
@@ -199,49 +194,32 @@ def main():
             preds   = [_resize_mask(p, args.image_size) for p in preds]
             targets = [_resize_mask(t, args.image_size) for t in targets]
 
-        all_preds[model_type] = preds
-        if all_targets is None:
-            all_targets = targets
+        # Score each image
+        scores = []
+        for i in range(len(val_ds)):
+            p = preds[i]
+            t = targets[i]
+            s = per_image_miou(p, t) if args.metric == "miou" \
+                else per_image_class_iou(p, t, PERSON_CLASS)
+            scores.append((i, s))
 
-    # Score each image using the primary model
-    primary_model = args.model_type[0]
-    score_label   = "mIoU" if args.metric == "miou" else "Person IoU"
+        valid_scores  = [(i, s) for i, s in scores if not np.isnan(s)]
+        sorted_scores = sorted(valid_scores, key=lambda x: x[1], reverse=True)
 
-    scores = []
-    for i in range(len(val_ds)):
-        p = all_preds[primary_model][i]
-        t = all_targets[i]
-        s = per_image_miou(p, t) if args.metric == "miou" \
-            else per_image_class_iou(p, t, PERSON_CLASS)
-        scores.append((i, s))
+        top3   = sorted_scores[:3]
+        worst3 = sorted_scores[-3:][::-1]
 
-    valid_scores  = [(i, s) for i, s in scores if not np.isnan(s)]
-    sorted_scores = sorted(valid_scores, key=lambda x: x[1], reverse=True)
+        print(f"\n[{model_type}] Top-3 ({score_label}):")
+        for i, s in top3:
+            print(f"  idx={i:4d}  {score_label}={s:.4f}")
+        print(f"[{model_type}] Worst-3 ({score_label}):")
+        for i, s in worst3:
+            print(f"  idx={i:4d}  {score_label}={s:.4f}")
 
-    top3   = sorted_scores[:3]
-    worst3 = sorted_scores[-3:][::-1]
-
-    print(f"\nTop-3 ({score_label}, model={primary_model}):")
-    for i, s in top3:
-        print(f"  idx={i:4d}  {score_label}={s:.4f}")
-    print(f"\nWorst-3 ({score_label}, model={primary_model}):")
-    for i, s in worst3:
-        print(f"  idx={i:4d}  {score_label}={s:.4f}")
-
-    model_names = args.model_type
-
-    plot_set(
-        val_ds, top3, all_preds, model_names,
-        title=f"Top-3 Best Results  [{primary_model}  {score_label}]",
-        save_path=os.path.join(args.output_dir, f"top3_{args.metric}.png"),
-        score_label=score_label,
-    )
-    plot_set(
-        val_ds, worst3, all_preds, model_names,
-        title=f"Top-3 Worst Results  [{primary_model}  {score_label}]",
-        save_path=os.path.join(args.output_dir, f"worst3_{args.metric}.png"),
-        score_label=score_label,
-    )
+        save_path = os.path.join(args.output_dir,
+                                 f"{model_type}_best_worst_{args.metric}.png")
+        plot_best_worst(val_ds, top3, worst3, preds, model_type,
+                        args.metric, score_label, save_path)
 
 
 if __name__ == "__main__":

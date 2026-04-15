@@ -154,6 +154,13 @@ def main():
         axes[row_i, 0].imshow(img_np);          axes[row_i, 0].axis("off")
         axes[row_i, 1].imshow(mask_to_rgb(gt_mask)); axes[row_i, 1].axis("off")
 
+        # Green border around Ground Truth cell
+        gt_rect = matplotlib.patches.Rectangle(
+            (0, 0), gt_mask.shape[1] - 1, gt_mask.shape[0] - 1,
+            linewidth=3, edgecolor="lime", facecolor="none",
+        )
+        axes[row_i, 1].add_patch(gt_rect)
+
         for col_j, (model_type, _) in enumerate(model_specs):
             info = models[model_type]
 

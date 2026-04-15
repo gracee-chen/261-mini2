@@ -114,6 +114,68 @@ def plot_confusion_matrix(cm: np.ndarray, class_names, normalize=True,
         plt.show()
 
 
+def plot_all_confusion_matrices(cm_list, class_names, normalize=True,
+                                save_path=None):
+    """
+    Plot multiple confusion matrices stacked vertically (one subplot per model).
+
+    Parameters
+    ----------
+    cm_list    : list of (model_name, cm_array) tuples
+    class_names: list of class label strings
+    normalize  : row-normalise (show fraction instead of counts)
+    save_path  : file path to save; None -> plt.show()
+    """
+    n = len(class_names)
+    n_models = len(cm_list)
+
+    fig, axes = plt.subplots(n_models, 1,
+                              figsize=(14, 12 * n_models))
+    if n_models == 1:
+        axes = [axes]
+
+    for ax_i, (model_name, cm) in enumerate(cm_list):
+        ax = axes[ax_i]
+        if normalize:
+            row_sums = cm.sum(axis=1, keepdims=True)
+            cm_plot  = np.where(row_sums > 0, cm / row_sums, 0.0)
+            fmt      = ".2f"
+        else:
+            cm_plot = cm
+            fmt     = "d"
+
+        im = ax.imshow(cm_plot, cmap="Blues", vmin=0, vmax=1 if normalize else None)
+        fig.colorbar(im, ax=ax,
+                     label="Fraction (row-normalised)" if normalize else "Pixel count",
+                     fraction=0.03, pad=0.04)
+
+        ax.set_xticks(range(n))
+        ax.set_yticks(range(n))
+        ax.set_xticklabels(class_names, rotation=45, ha="right", fontsize=8)
+        ax.set_yticklabels(class_names, fontsize=8)
+        ax.set_xlabel("Predicted class")
+        ax.set_ylabel("True class")
+        ax.set_title(f"Confusion Matrix — {model_name}")
+
+        # Annotate diagonal cells
+        for i in range(n):
+            val   = cm_plot[i, i]
+            color = "white" if val > 0.5 else "black"
+            text  = f"{val:.2f}" if normalize else str(int(val))
+            ax.text(i, i, text, ha="center", va="center",
+                    fontsize=6, color=color, fontweight="bold")
+
+    plt.tight_layout()
+
+    if save_path:
+        os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+        print(f"Combined confusion matrices saved -> {save_path}")
+        plt.close()
+    else:
+        plt.show()
+
+
 def print_confusion_summary(cm: np.ndarray, class_names):
     """For each class, print the most common misclassification."""
     print(f"\n{'='*58}")
@@ -137,9 +199,9 @@ def print_confusion_summary(cm: np.ndarray, class_names):
 
 def parse_args():
     p = argparse.ArgumentParser(description="Compute and plot confusion matrix")
-    p.add_argument("--model-type",  required=True,
+    p.add_argument("--model-type",  nargs="+", required=True,
                    choices=["unet", "deeplabv3plus", "sam2", "dinov2"])
-    p.add_argument("--checkpoint",  required=True)
+    p.add_argument("--checkpoint",  nargs="+", required=True)
     p.add_argument("--voc-root",    required=True)
     p.add_argument("--image-size",  type=int, default=256)
     p.add_argument("--batch-size",  type=int, default=8)
@@ -159,27 +221,47 @@ def main():
         "mps"  if torch.backends.mps.is_available() else "cpu"
     )
 
-    image_size = 224 if args.model_type == "dinov2" else args.image_size
-    _, val_ds  = get_datasets(args.voc_root, image_size=image_size)
-    val_loader = DataLoader(val_ds, batch_size=args.batch_size,
-                            shuffle=False, num_workers=args.num_workers)
-
-    model  = load_model(args.model_type, args.checkpoint, device,
-                        sam2_ckpt=args.sam2_ckpt, sam2_cfg=args.sam2_cfg)
-    preds, targets = run_inference(model, val_loader, device)
-
-    cm = build_confusion_matrix(preds, targets)
-    print_confusion_summary(cm, VOC_CLASSES)
+    if len(args.model_type) != len(args.checkpoint):
+        raise ValueError("--model-type and --checkpoint must have the same length")
 
     os.makedirs(args.output_dir, exist_ok=True)
-    save_path = os.path.join(args.output_dir,
-                             f"{args.model_type}_confusion_matrix.png")
-    plot_confusion_matrix(
-        cm, VOC_CLASSES,
-        normalize=not args.no_normalize,
-        save_path=save_path,
-        title=f"Confusion Matrix — {args.model_type}",
-    )
+    normalize = not args.no_normalize
+
+    cm_list = []  # (model_name, cm) for combined plot
+
+    for model_type, ckpt_path in zip(args.model_type, args.checkpoint):
+        image_size = 224 if model_type == "dinov2" else args.image_size
+        _, val_ds  = get_datasets(args.voc_root, image_size=image_size)
+        val_loader = DataLoader(val_ds, batch_size=args.batch_size,
+                                shuffle=False, num_workers=args.num_workers)
+
+        model  = load_model(model_type, ckpt_path, device,
+                            sam2_ckpt=args.sam2_ckpt, sam2_cfg=args.sam2_cfg)
+        preds, targets = run_inference(model, val_loader, device)
+
+        cm = build_confusion_matrix(preds, targets)
+        cm_list.append((model_type, cm))
+        print_confusion_summary(cm, VOC_CLASSES)
+
+        # Individual PNG
+        save_path = os.path.join(args.output_dir,
+                                 f"{model_type}_confusion_matrix.png")
+        plot_confusion_matrix(
+            cm, VOC_CLASSES,
+            normalize=normalize,
+            save_path=save_path,
+            title=f"Confusion Matrix — {model_type}",
+        )
+
+    # Combined figure when multiple models are given
+    if len(cm_list) > 1:
+        combined_path = os.path.join(args.output_dir,
+                                     "all_confusion_matrices.png")
+        plot_all_confusion_matrices(
+            cm_list, VOC_CLASSES,
+            normalize=normalize,
+            save_path=combined_path,
+        )
 
 
 if __name__ == "__main__":
