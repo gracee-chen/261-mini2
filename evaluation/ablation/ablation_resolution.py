@@ -55,7 +55,6 @@ def print_resolution_table(results: list):
     print(f"{'='*68}")
     print(f"  {'Variant':<20} {'Resolution':>12} {'mIoU':>8} {'mDice':>8} {'PixAcc':>8}")
     print(f"  {'-'*60}")
-    res_map = {"128x128": "128x128", "256x256": "256x256", "384x384": "384x384"}
     for m in results:
         res = m.get("resolution", "—")
         print(f"  {m['name']:<20} {res:>12} {m['mIoU']:>8.4f} "

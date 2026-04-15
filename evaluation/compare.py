@@ -201,7 +201,7 @@ def _bar_chart(models, values, ylabel, title, output_path,
     for bar, v in zip(bars, values):
         if not np.isnan(v):
             ax.text(bar.get_x() + bar.get_width() / 2,
-                    bar.get_height() + max(values) * 0.01,
+                    bar.get_height() + np.nanmax(values) * 0.01,
                     f"{v:.4f}", ha="center", va="bottom", fontsize=8)
 
     arrow = "higher = better" if higher_is_better else "lower = better"

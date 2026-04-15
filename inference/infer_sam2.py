@@ -47,8 +47,11 @@ def parse_args():
                    help="Path to the original SAM2 weights (.pt)")
     p.add_argument("--sam2-cfg",
                    default="configs/sam2.1/sam2.1_hiera_b+.yaml")
-    p.add_argument("--freeze-encoder", action="store_true", default=True,
-                   help="Keep SAM2 image encoder frozen (match training default)")
+    p.add_argument("--freeze-encoder", action="store_true",
+                   help="Keep SAM2 image encoder frozen (default: frozen)")
+    p.add_argument("--unfreeze-encoder", dest="freeze_encoder", action="store_false",
+                   help="Unfreeze SAM2 encoder (use if trained with --unfreeze-encoder)")
+    p.set_defaults(freeze_encoder=True)
     p.add_argument("--images",         nargs="*")
     p.add_argument("--voc-root",     default=None)
     p.add_argument("--num-samples",  type=int, default=4)
