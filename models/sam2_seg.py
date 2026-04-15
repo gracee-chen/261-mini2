@@ -63,27 +63,24 @@ class SAM2SemanticSeg(nn.Module):
             for p in self.image_encoder.parameters():
                 p.requires_grad_(False)
 
-        # Fuse all available FPN levels (3 after scalp=1) for richer features
-        self.lateral_convs = nn.ModuleList([
+        # Per-level 3×3 conv → 128 channels (applied before upsampling)
+        head_ch = 128
+        self.level_convs = nn.ModuleList([
             nn.Sequential(
-                nn.Conv2d(SAM2_FPN_CHANNELS, SAM2_FPN_CHANNELS, 1, bias=False),
-                nn.BatchNorm2d(SAM2_FPN_CHANNELS),
+                nn.Conv2d(SAM2_FPN_CHANNELS, head_ch, 3, padding=1, bias=False),
+                nn.BatchNorm2d(head_ch),
                 nn.ReLU(inplace=True),
             )
             for _ in range(3)
         ])
 
-        self.head = nn.Sequential(
-            nn.Conv2d(SAM2_FPN_CHANNELS, 256, 3, padding=1, bias=False),
-            nn.BatchNorm2d(256),
+        # Fuse concatenated features (128 × 3 = 384) → classify
+        self.fuse_conv = nn.Sequential(
+            nn.Conv2d(head_ch * 3, head_ch, 3, padding=1, bias=False),
+            nn.BatchNorm2d(head_ch),
             nn.ReLU(inplace=True),
-            nn.Dropout2d(0.1),
-            nn.Conv2d(256, 256, 3, padding=1, bias=False),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
-            nn.Dropout2d(0.1),
-            nn.Conv2d(256, num_classes, 1),
         )
+        self.classifier = nn.Conv2d(head_ch, num_classes, 1)
 
     def train(self, mode: bool = True):
         """Keep encoder in eval mode when frozen (preserves dropout/drop-path)."""
@@ -101,27 +98,19 @@ class SAM2SemanticSeg(nn.Module):
 
         fpn = enc_out["backbone_fpn"]
 
-        # One-shot diagnostic: print feature shapes and statistics
-        if not self._logged:
-            self._logged = True
-            print(f"  [SAM2 diag] input={x.shape}, FPN levels={len(fpn)}")
-            for i, f in enumerate(fpn):
-                print(f"  [SAM2 diag] fpn[{i}]: shape={f.shape}, "
-                      f"mean={f.float().mean():.4f}, std={f.float().std():.4f}")
-
-        # Fuse all FPN levels to the finest resolution
+        # Per-level conv → 128ch, upsample to finest, concatenate
         target_size = fpn[0].shape[-2:]   # finest level spatial size
-        fused = torch.zeros(B, SAM2_FPN_CHANNELS, *target_size,
-                            device=x.device, dtype=fpn[0].dtype)
-        for i, lat_conv in enumerate(self.lateral_convs):
+        level_feats = []
+        for i, conv in enumerate(self.level_convs):
             if i < len(fpn):
-                feat = lat_conv(fpn[i])
+                feat = conv(fpn[i])
                 if feat.shape[-2:] != target_size:
                     feat = F.interpolate(feat, size=target_size,
                                          mode="bilinear", align_corners=False)
-                fused = fused + feat
+                level_feats.append(feat)
 
-        logits = self.head(fused)
+        fused = self.fuse_conv(torch.cat(level_feats, dim=1))
+        logits = self.classifier(fused)
         logits = F.interpolate(logits, size=(H, W), mode="bilinear", align_corners=False)
         return logits
 
