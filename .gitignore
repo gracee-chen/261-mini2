@@ -37,6 +37,13 @@ Thumbs.db
 # Logs & outputs
 runs/
 logs/
+log/
 outputs/
 wandb/
 *.log
+
+# LaTeX source
+Latex/
+
+# Colab notebooks
+*.ipynb
